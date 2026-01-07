@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Seminar Chatbot</title>
+    <!-- Tailwind CSS für schickes Design ohne extra CSS-Datei -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Ein paar kleine Anpassungen für den Chat-Look */
+        .chat-container { height: calc(100vh - 160px); }
+        .message-bubble { max-width: 80%; }
+        /* Lade-Animation */
+        .dot { animation: wave 1.3s linear infinite; }
+        .dot:nth-child(2) { animation-delay: -1.1s; }
+        .dot:nth-child(3) { animation-delay: -0.9s; }
+        @keyframes wave { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-4px); } }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans">
+
+    <div class="max-w-2xl mx-auto h-screen flex flex-col p-4">
+        <!-- Header -->
+        <header class="bg-blue-600 text-white p-4 rounded-t-lg shadow-lg">
+            <h1 class="text-xl font-bold text-center">🤖 KI Seminar Bot</h1>
+            <p class="text-xs text-center opacity-80">Verbunden mit Make.com & OpenRouter</p>
+        </header>
+
+        <!-- Chat Fenster -->
+        <div id="chat-window" class="chat-container flex-1 overflow-y-auto bg-white p-4 shadow-inner space-y-4">
+            <!-- Begrüßung -->
+            <div class="flex justify-start">
+                <div class="bg-gray-200 text-gray-800 p-3 rounded-lg rounded-bl-none shadow-sm message-bubble">
+                    Hallo! Ich bin dein Seminar-Chatbot. Wie kann ich dir heute helfen?
+                </div>
+            </div>
+        </div>
+
+        <!-- Eingabebereich -->
+        <footer class="bg-white p-4 border-t border-gray-200 rounded-b-lg shadow-lg">
+            <form id="chat-form" class="flex gap-2">
+                <input 
+                    type="text" 
+                    id="user-input" 
+                    class="flex-1 border border-gray-300 p-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" 
+                    placeholder="Schreibe eine Nachricht..."
+                    required
+                >
+                <button 
+                    type="submit" 
+                    id="send-btn"
+                    class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-semibold transition-colors disabled:bg-gray-400"
+                >
+                    Senden
+                </button>
+            </form>
+        </footer>
+    </div>
+
+    <script>
+        /**
+         * KONFIGURATION:
+         * Hier müssen die Teilnehmer ihre Webhook-URL von Make.com eintragen!
+         */
+        const MAKE_WEBHOOK_URL = "HIER_DEINE_MAKE_WEBHOOK_URL_EINFÜGEN";
+
+        const chatWindow = document.getElementById('chat-window');
+        const chatForm = document.getElementById('chat-form');
+        const userInput = document.getElementById('user-input');
+        const sendBtn = document.getElementById('send-btn');
+
+        // Hilfsfunktion: Nachricht im UI anzeigen
+        function addMessage(text, isUser = false) {
+            const wrapper = document.createElement('div');
+            wrapper.className = `flex ${isUser ? 'justify-end' : 'justify-start'}`;
+            
+            const bubble = document.createElement('div');
+            bubble.className = `p-3 rounded-lg shadow-sm message-bubble ${
+                isUser ? 'bg-blue-500 text-white rounded-br-none' : 'bg-gray-200 text-gray-800 rounded-bl-none'
+            }`;
+            bubble.textContent = text;
+            
+            wrapper.appendChild(bubble);
+            chatWindow.appendChild(wrapper);
+            
+            // Automatisch nach unten scrollen
+            chatWindow.scrollTop = chatWindow.scrollHeight;
+        }
+
+        // Hilfsfunktion: Lade-Indikator
+        function showTypingIndicator() {
+            const id = 'typing-indicator';
+            const wrapper = document.createElement('div');
+            wrapper.id = id;
+            wrapper.className = 'flex justify-start';
+            wrapper.innerHTML = `
+                <div class="bg-gray-200 p-3 rounded-lg rounded-bl-none flex gap-1">
+                    <div class="dot w-1 h-1 bg-gray-500 rounded-full"></div>
+                    <div class="dot w-1 h-1 bg-gray-500 rounded-full"></div>
+                    <div class="dot w-1 h-1 bg-gray-500 rounded-full"></div>
+                </div>
+            `;
+            chatWindow.appendChild(wrapper);
+            chatWindow.scrollTop = chatWindow.scrollHeight;
+            return id;
+        }
+
+        // Event-Listener für das Absenden des Formulars
+        chatForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const message = userInput.value.trim();
+            if (!message) return;
+
+            // 1. Nachricht im UI anzeigen
+            addMessage(message, true);
+            userInput.value = '';
+            
+            // UI sperren
+            userInput.disabled = true;
+            sendBtn.disabled = true;
+
+            const typingId = showTypingIndicator();
+
+            try {
+                // 2. Kommunikation mit Make.com
+                const response = await fetch(MAKE_WEBHOOK_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    // Wir senden die Nachricht als JSON-Objekt
+                    body: JSON.stringify({ message: message })
+                });
+
+                if (!response.ok) throw new Error('Netzwerk-Antwort war nicht ok');
+
+                const botReply = await response.text(); // Make schickt oft Text oder JSON zurück
+                
+                // 3. Antwort anzeigen
+                document.getElementById(typingId).remove();
+                addMessage(botReply || "Keine Antwort erhalten.");
+
+            } catch (error) {
+                console.error('Fehler:', error);
+                document.getElementById(typingId).remove();
+                addMessage("Ups! Etwas ist schief gelaufen. Überprüfe die Webhook-URL.");
+            } finally {
+                // UI wieder freigeben
+                userInput.disabled = false;
+                sendBtn.disabled = false;
+                userInput.focus();
+            }
+        });
+    </script>
+</body>
+</html>
